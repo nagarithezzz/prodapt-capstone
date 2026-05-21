@@ -5,6 +5,7 @@ import tempfile
 from io import StringIO
 
 from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi.responses import StreamingResponse
 from src.api.schemas import (
     SearchRequest,
     SearchResponse,
@@ -13,7 +14,7 @@ from src.api.schemas import (
     IngestResponse,
     CandidateDetail,
 )
-from src.pipeline import run_pipeline
+from src.pipeline import run_pipeline, run_pipeline_stream
 from src.ingestion.resume_parser import parse_resume
 from src.embeddings.ingest_vectors import ingest_all
 
@@ -82,6 +83,22 @@ def search(req: SearchRequest):
             for r in result["results"]
         ],
     )
+
+
+@app.post("/search/stream")
+def search_stream(req: SearchRequest):
+    if not req.query.strip():
+        raise HTTPException(status_code=400, detail="Query cannot be empty")
+
+    def event_stream():
+        for event in run_pipeline_stream(
+            query=req.query,
+            top_k_rerank=req.top_k,
+            expand_queries=req.expand_queries,
+        ):
+            yield f"data: {json.dumps(event)}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 @app.get("/candidates/{candidate_id}", response_model=CandidateDetail)

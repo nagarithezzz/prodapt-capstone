@@ -1,3 +1,4 @@
+import json
 import streamlit as st
 import requests
 
@@ -26,20 +27,60 @@ if st.button("Search", type="primary", use_container_width=True):
     if not query.strip():
         st.error("Please enter a job requirement.")
     else:
-        with st.spinner("Running pipeline..."):
+        with st.status("Searching candidates...", expanded=True) as status:
             try:
                 resp = requests.post(
-                    f"{API_URL}/search",
+                    f"{API_URL}/search/stream",
                     json={"query": query, "top_k": top_k, "expand_queries": True},
+                    stream=True,
                     timeout=120,
                 )
                 resp.raise_for_status()
-                data = resp.json()
-                st.session_state.results = data["results"]
-                st.session_state.requirements = data["requirements"]
-                st.session_state.last_query = query
-                st.session_state.email_popup = None
-                st.rerun()
+
+                data = None
+                for line in resp.iter_lines():
+                    if not line:
+                        continue
+                    raw = line.decode("utf-8")
+                    if not raw.startswith("data: "):
+                        continue
+                    event = json.loads(raw[6:])
+
+                    if event.get("type") == "step":
+                        step = event["step"]
+                        evt_status = event["status"]
+                        detail = event.get("detail", "")
+                        t = event.get("time")
+                        if evt_status == "running":
+                            status.write(f"⏳ **{step}**...")
+                        elif evt_status == "done":
+                            label = f"✅ **{step}**"
+                            if t is not None:
+                                label += f" — {t:.1f}s"
+                            if detail:
+                                label += f"  \n_{detail}_"
+                            status.write(label)
+                        elif evt_status == "skipped":
+                            status.write(f"⏭️ **{step}** — skipped")
+
+                    elif event.get("type") == "result":
+                        data = event
+                        status.update(
+                            label=f"✅ Found {len(data['results'])} candidates in {data['elapsed']:.1f}s",
+                            state="complete",
+                        )
+                    elif event.get("type") == "error":
+                        status.update(label="❌ Search failed", state="error")
+                        st.error(event["message"])
+                        data = None
+
+                if data:
+                    st.session_state.results = data["results"]
+                    st.session_state.requirements = data["requirements"]
+                    st.session_state.last_query = query
+                    st.session_state.email_popup = None
+                    st.rerun()
+
             except requests.exceptions.ConnectionError:
                 st.error(f"Cannot connect to API at {API_URL}")
             except Exception as e:
