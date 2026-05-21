@@ -83,7 +83,7 @@ if st.session_state.results:
             just_col, email_col = st.columns([1, 1])
             with just_col:
                 with st.expander("💬 Justification"):
-                    st.write(r["justification"])
+                    st.markdown(r["justification"])
             with email_col:
                 if st.button("📧 Send Email", key=f"eb_{r['id']}", use_container_width=True):
                     st.session_state.email_popup = r["id"]

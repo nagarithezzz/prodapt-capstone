@@ -20,12 +20,19 @@ _SCORE_PROMPT = """You are a hiring expert evaluating candidate-job fit.
 
 Job requirement: {query}
 
-Rank these candidates and provide a score (0-100), justification, and a shortlist email for each.
+Rank these candidates and provide a score (0-100), structured justification, and a shortlist email for each.
 
 For each candidate evaluate:
 1. Skill match: How well their skills match the requirements
 2. Experience fit: Years and relevance of experience
 3. Overall suitability: Combined assessment
+
+The "justification" field must be structured with these sections (use the exact format below, replacing placeholders):
+**Skills match:** List each required skill with ✓ or ✗, and show count (e.g. "Python ✓, AWS ✓, Docker ✗ (2/3 required)")
+**Experience:** Expected years range and whether candidate meets it (e.g. "4 years (required: 3-5) ✓" or "2 years (required: 5+) ✗")
+**Missing skills:** Comma-separated list of missing skills, or "None"
+**Role alignment:** Whether their role/career trajectory fits (e.g. "Senior backend engineer with cloud experience ✓")
+**Why:** 1-2 sentence explanation of overall fit
 
 Return ONLY a JSON array with objects:
 [
@@ -34,7 +41,7 @@ Return ONLY a JSON array with objects:
     "overall_score": 0-100,
     "skill_score": 0-100,
     "experience_score": 0-100,
-    "justification": "2-3 sentence explanation of why they fit",
+    "justification": "**Skills match:** Python ✓, AWS ✓, Docker ✗ (2/3 required)\\n**Experience:** 4 years (required: 3-5) ✓\\n**Missing skills:** Docker\\n**Role alignment:** Senior backend engineer ✓\\n**Why:** Strong alignment on technical stack and experience level.",
     "email_subject": "Shortlist email subject line (max 10 words)",
     "email_body": "Professional email body (3-4 sentences) informing the candidate they are shortlisted for the interview, mention how their skills/experience matched the role, and that interview details will follow soon."
   }}
