@@ -17,6 +17,8 @@ if "email_popup" not in st.session_state:
     st.session_state.email_popup = None
 if "bg_verification" not in st.session_state:
     st.session_state.bg_verification = {}
+if "questions_data" not in st.session_state:
+    st.session_state.questions_data = {}
 
 query = st.text_area(
     "Job Requirement",
@@ -81,6 +83,7 @@ if st.button("Search", type="primary", use_container_width=True):
                     st.session_state.last_query = query
                     st.session_state.email_popup = None
                     st.session_state.bg_verification = {}
+                    st.session_state.questions_data = {}
                     st.rerun()
 
             except requests.exceptions.ConnectionError:
@@ -123,7 +126,7 @@ if st.session_state.results:
                 exp = r["years_experience"]
                 st.markdown(f"**Years Exp:** {exp if exp is not None and exp >= 0 else 'Unknown'}")
 
-            just_col, bg_col, email_col = st.columns([1, 1, 1])
+            just_col, bg_col, iq_col, email_col = st.columns([1, 1, 1, 1])
             with just_col:
                 with st.expander("💬 Justification"):
                     st.markdown(r["justification"])
@@ -201,6 +204,46 @@ if st.session_state.results:
                                         st.markdown(f"_{exp['description'][:300]}_")
                 elif bg.get("status") == "error":
                     st.error(f"❌ {bg.get('message', 'BG verification failed')}")
+            with iq_col:
+                if st.button("🎯 Generate Questions", key=f"iq_{r['id']}", use_container_width=True):
+                    with st.spinner("Generating interview questions..."):
+                        try:
+                            iq_resp = requests.post(
+                                f"{API_URL}/generate-questions",
+                                json={"candidate_id": r["id"]},
+                                timeout=60,
+                            )
+                            if iq_resp.ok:
+                                iq_data = iq_resp.json()
+                                st.session_state.questions_data[r["id"]] = iq_data
+                            else:
+                                st.session_state.questions_data[r["id"]] = {
+                                    "status": "error",
+                                    "message": "Failed to generate questions",
+                                }
+                        except Exception as e:
+                            st.session_state.questions_data[r["id"]] = {
+                                "status": "error",
+                                "message": f"Error: {str(e)}",
+                            }
+                    st.rerun()
+
+            if r["id"] in st.session_state.questions_data:
+                qd = st.session_state.questions_data[r["id"]]
+                if qd.get("status") == "success":
+                    hr_qs = qd.get("hr_questions", [])
+                    tech_qs = qd.get("technical_questions", [])
+                    q_tab1, q_tab2 = st.tabs(["👔 HR Questions", "💻 Technical Questions"])
+                    with q_tab1:
+                        for idx, q in enumerate(hr_qs, 1):
+                            with st.container(border=True):
+                                st.markdown(f"**Q{idx}.** {q}")
+                    with q_tab2:
+                        for idx, q in enumerate(tech_qs, 1):
+                            with st.container(border=True):
+                                st.markdown(f"**Q{idx}.** {q}")
+                elif qd.get("status") == "error":
+                    st.error(f"❌ {qd.get('message', 'Failed to generate questions')}")
             with email_col:
                 if st.button("📧 Send Email", key=f"eb_{r['id']}", use_container_width=True):
                     st.session_state.email_popup = r["id"]

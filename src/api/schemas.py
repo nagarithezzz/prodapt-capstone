@@ -83,3 +83,14 @@ class BgVerificationResponse(BaseModel):
     message: str = ""
     about: str = ""
     experience: list[ExperienceEntry] = []
+
+
+class GenerateQuestionsRequest(BaseModel):
+    candidate_id: str
+
+
+class GenerateQuestionsResponse(BaseModel):
+    status: str
+    message: str = ""
+    hr_questions: list[str] = []
+    technical_questions: list[str] = []

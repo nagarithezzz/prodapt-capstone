@@ -16,11 +16,14 @@ from src.api.schemas import (
     BgVerificationRequest,
     BgVerificationResponse,
     ExperienceEntry,
+    GenerateQuestionsRequest,
+    GenerateQuestionsResponse,
 )
 from src.pipeline import run_pipeline, run_pipeline_stream
 from src.ingestion.resume_parser import parse_resume
 from src.embeddings.ingest_vectors import ingest_all
 from src.agents.bg_verification import scrape_linkedin_profile
+from src.agents.question_generator import generate_questions
 
 app = FastAPI(title="Resume Intelligence API", version="1.0.0")
 
@@ -56,6 +59,27 @@ def bg_verification(req: BgVerificationRequest):
         message=result.get("message", ""),
         about=result.get("about", ""),
         experience=[ExperienceEntry(**e) for e in result.get("experience", [])],
+    )
+
+
+@app.post("/generate-questions", response_model=GenerateQuestionsResponse)
+def questions(req: GenerateQuestionsRequest):
+    candidates = _load_candidates()
+    candidate = None
+    for c in candidates:
+        if c["id"] == req.candidate_id:
+            candidate = c
+            break
+
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    result = generate_questions(candidate)
+
+    return GenerateQuestionsResponse(
+        status="success",
+        hr_questions=result.get("hr_questions", []),
+        technical_questions=result.get("technical_questions", []),
     )
 
 
