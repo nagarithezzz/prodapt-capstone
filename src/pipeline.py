@@ -141,6 +141,8 @@ def run_pipeline_stream(
     for r in scored:
         logger.info(f"  RESULT: {r['id']} | Score={r['overall_score']}/100 "
                     f"| Skills={','.join(r['skills'][:5])}")
+        logger.info(f"  EMAIL Subject: {r.get('email_subject', '')}")
+        logger.info(f"  EMAIL Body: {r.get('email_body', '')}")
 
     elapsed = time.perf_counter() - t0
     logger.info("=" * 60)

@@ -74,6 +74,9 @@ def search_candidates(
             "years_experience": meta.get("years_experience", -1),
             "role_category": meta.get("role_category", ""),
             "text_preview": meta.get("text_preview", ""),
+            "decision": meta.get("decision", ""),
+            "reason_for_decision": meta.get("reason_for_decision", ""),
+            "job_description": meta.get("job_description", ""),
         })
 
     logger.debug(f"    Pinecone returned {len(candidates)} matches "

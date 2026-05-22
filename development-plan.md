@@ -19,18 +19,18 @@ Phase 3.1 — Query Understanding (LLM: GPT-4o-mini)
              └─ Query expansion (3 alternative phrasings)
      ↓
 Phase 3.2 — Hybrid Retrieval
-             ├─ Vector Search (Pinecone cosine sim, top-60)
+             ├─ Vector Search (Pinecone cosine sim, top-30)
              │   └─ Query embedded via text-embedding-3-small
-             └─ BM25 Search (local index, top-60)
+             └─ BM25 Search (local index, top-30)
      ↓
 Phase 3.3 — RRF Fusion (k=60) merge & deduplicate → top-20
      ↓
-Phase 3.4 — Cross-Encoder Reranking (BAAI/bge-reranker-v2-m3, top-20 → top-5)
+Phase 3.4 — Cross-Encoder Reranking (BAAI/bge-reranker-v2-m3, top-20 → top-K)
      ↓
 Phase 3.5 — LLM Scoring (GPT-4o-mini)
              ├─ overall_score, skill_score, experience_score
-             ├─ Justification (2-3 sentence explanation)
-             └─ email_subject + email_body (shortlist email draft)
+             ├─ Justification (structured skill/experience breakdown)
+             └─ Interview invitation email (subject + body, signed Naga Rithesh)
      ↓
 [Ranked output + email drafts → Streamlit UI]
 ```
@@ -46,24 +46,28 @@ Phase 3.5 — LLM Scoring (GPT-4o-mini)
 | 1.3 | Extract structured fields (skills, experience, education, category) | ✅ Done |
 | 1.4 | Save as JSON (`data/processed/resumes.json`) | ✅ Done |
 | 1.5 | Validate & filter bad entries | ✅ Done |
+| 1.6 | Extract email from resume text | ✅ Done |
+| 1.7 | Parse new CSV format with Decision/Reason_for_decision/Job_Description columns | ✅ Done |
 
-**Output:** `data/processed/resumes.json` — 2,484 candidates, 29 MB
+**Output:** `data/processed/resumes.json` — 10,174 candidates, 325 MB
 
 **Key files:**
-- `src/ingestion/resume_parser.py` — HTML→text cleaner, section extractor, experience/role parser
+- `src/ingestion/resume_parser.py` — HTML→text cleaner, section extractor, experience/role parser, email extractor
 - `src/ingestion/skill_dict.py` — 800+ skill keywords with regex word-boundary matching across 30 domains
 - `src/ingestion/ingest.py` — Pipeline: reads CSV → parses each row → writes JSON
 
-**Extraction stats:**
-| Metric | Value |
-|---|---|
-| Candidates parsed | 2,484 (0 errors) |
-| With skills detected | 2,030 (81.7%) |
-| With role category | 2,369 (95.4%) |
-| With sections extracted | 2,483 (100%) |
-| With years experience | 314 (12.6%) |
-| Unique categories | 24 |
-| Avg text length | 6,631 chars |
+### Enhanced Resume Fields
+
+| Field | Source | Description |
+|---|---|---|
+| `id` | Generated | Unique identifier (RES-XXXXX) |
+| `email` | Extracted | Candidate email from resume text |
+| `skills` | Extracted | Skills via hybrid keyword matching |
+| `years_experience` | Extracted | Years of experience from resume text |
+| `role_category` | Inferred | Role category from resume (e.g. "E-commerce Specialist") |
+| `decision` | CSV column | Hiring decision (accept/reject) |
+| `reason_for_decision` | CSV column | Reason for the hiring decision |
+| `job_description` | CSV column | Associated job description |
 
 ---
 
@@ -71,26 +75,27 @@ Phase 3.5 — LLM Scoring (GPT-4o-mini)
 
 | Step | Task | Details | Status |
 |---|---|---|---|
-| 2.1 | Semantic chunking | Split resume text by sections (summary, experience, skills, education, projects) — 15,322 chunks created | ✅ Done |
+| 2.1 | Semantic chunking | Split resume text by sections — 54,276 chunks created from 10,174 candidates | ✅ Done |
 | 2.2 | Generate embeddings | **OpenAI `text-embedding-3-small`** (1,536-dim, $0.02/1K tokens) — full-resume embeddings | ✅ Done |
 | 2.3 | Store in vector DB | **Pinecone** serverless index (`resume-matcher`, cosine metric, AWS us-east-1) | ✅ Done |
-| 2.4 | Metadata indexing | Indexed by `category`, `skills`, `years_experience`, `role_category` | ✅ Done |
+| 2.4 | Metadata indexing | Indexed by `category`, `skills`, `years_experience`, `role_category`, `decision`, `reason_for_decision`, `job_description` | ✅ Done |
 
 **Results:**
 | Metric | Value |
 |---|---|
-| Vectors indexed | 2,483 |
+| Vectors indexed | 10,174 |
 | Vector dimension | 1,536 |
-| Total tokens consumed | 3,203,124 |
-| Embedding cost | ~$64.06 |
-| Total time | 3.6 min |
+| Total tokens consumed | 5,866,099 |
+| Embedding cost | ~$117.32 |
+| Total time | ~7.5 min |
 
 **Key Decisions:**
-- **Embedding model:** OpenAI `text-embedding-3-small` — 1,536-dim, good quality-to-cost ratio; automatically handles domain-agnostic semantic understanding
+- **Embedding model:** OpenAI `text-embedding-3-small` — 1,536-dim, good quality-to-cost ratio
 - **Chunking:** Semantic by section (not fixed-size) — preserves context for later skill evaluation
 - **Vector DB:** Pinecone serverless — zero ops, built-in metadata filtering, cosine similarity
 - **Pipeline:** Chunk → embed (batch 20) → upsert (batch 100)
 - **Config:** All API keys in `.env` (gitignored); template in `.env.example`
+- **Schema update:** Metadata includes `decision`, `reason_for_decision`, `job_description` fields
 
 **Key files:**
 - `src/embeddings/chunker.py` — Semantic section-based resume chunker
@@ -116,43 +121,35 @@ Phase 3.5 — LLM Scoring (GPT-4o-mini)
 | Step | Task | Details | Status |
 |---|---|---|---|
 | 3.2.1 | Query embedding | All 4 expanded queries embedded via `text-embedding-3-small` | ✅ Done |
-| 3.2.2 | Vector search | Cosine similarity search on Pinecone, top-60 per query → merged by unique candidate ID | ✅ Done |
-| 3.2.3 | BM25 search | Local BM25 Okapi index (2,484 docs, ~2M tokens); same expanded queries searched, top-60 per query | ✅ Done |
+| 3.2.2 | Vector search | Cosine similarity search on Pinecone, top-30 per query → merged by unique candidate ID | ✅ Done |
+| 3.2.3 | BM25 search | Local BM25 Okapi index (10,174 docs, ~3.6M tokens); same expanded queries searched, top-30 per query | ✅ Done |
 | 3.2.4 | RRF Fusion | Reciprocal Rank Fusion (k=60) combines vector + BM25 scores into unified ranking | ✅ Done |
-
-**Note:** Category pre-filtering removed — it was silently excluding good cross-domain matches.
 
 ### Phase 3.3 — Cross-Encoder Reranking
 
 | Step | Task | Details | Status |
 |---|---|---|---|
-| 3.3.1 | Load full resume text | Full text from `resumes.json` (not truncated Pinecone metadata) loaded for reranking context | ✅ Done |
-| 3.3.2 | Cross-encoder scoring | `BAAI/bge-reranker-v2-m3` scores each candidate against query; model loaded on first call, cached thereafter (~4s load time) | ✅ Done |
+| 3.3.1 | Load full resume text | Full text from `resumes.json` loaded for reranking context | ✅ Done |
+| 3.3.2 | Cross-encoder scoring | `BAAI/bge-reranker-v2-m3` scores each candidate against query | ✅ Done |
 | 3.3.3 | Top-20 → top-K | Sorted by cross-encoder logit scores, top-K returned | ✅ Done |
-
-**Model choice:** Switched from `cross-encoder/ms-marco-MiniLM-L-6-v2` to `BAAI/bge-reranker-v2-m3` for cleaner HuggingFace repo (no 404 redirect spam) and better resume-job matching performance.
 
 ### Phase 3.4 — LLM Final Scoring + Email Generation
 
 | Step | Task | Details | Status |
 |---|---|---|---|
-| 3.4.1 | Build prompt | GPT-4o-mini receives job query + top-K candidate profiles (skills, experience, full resume text) | ✅ Done |
+| 3.4.1 | Build prompt | GPT-4o-mini receives job query + top-K candidate profiles | ✅ Done |
 | 3.4.2 | Score dimensions | `overall_score` (0-100), `skill_score`, `experience_score` per candidate | ✅ Done |
-| 3.4.3 | Justification | 2-3 sentence natural language explanation for each recommendation | ✅ Done |
-| 3.4.4 | Email generation | `email_subject` and `email_body` generated in same LLM call (no extra API cost) for shortlist outreach | ✅ Done |
+| 3.4.3 | Justification | Structured breakdown: skill match, experience fit, missing skills, role alignment, overall why | ✅ Done |
+| 3.4.4 | Email generation | Interview invitation email with subject + body, signed "Best regards, Naga Rithesh" | ✅ Done |
 
-**Real output:**
-```json
-{
-  "candidate_id": "25061645",
-  "overall_score": 90,
-  "skill_score": 95,
-  "experience_score": 85,
-  "justification": "This candidate has a strong skill set that directly aligns with the job requirements, including web design and various design software.",
-  "email_subject": "Shortlisted for Web Designer Position at Prodapt",
-  "email_body": "Dear Candidate,\n\nWe were impressed by your profile and would like to shortlist you for the Web Designer position..."
-}
-```
+### Phase 3.5 — Retrieval Evaluation
+
+| Metric | Vector Only | Hybrid | Hybrid + Rerank |
+|---|---|---|---|
+| P@3 | 0.800 | 0.867 | 0.867 |
+| P@5 | 0.820 | 0.900 | 0.920 |
+| MRR | 0.858 | 0.900 | 0.900 |
+| nDCG@5 | 0.891 | 0.935 | 0.940 |
 
 ---
 
@@ -160,18 +157,29 @@ Phase 3.5 — LLM Scoring (GPT-4o-mini)
 
 | Step | Task | Details | Status |
 |---|---|---|---|
-| 4.1 | FastAPI endpoints | `POST /search` (query → ranked results), `POST /ingest` (upload resume), `GET /candidates/{id}`, `GET /health` | ✅ Done |
-| 4.2 | Pydantic schemas | `ScoredCandidate`, `CandidateDetail`, `SearchRequest`, `SearchResponse`, `Requirements` with validation | ✅ Done |
-| 4.3 | Streamlit UI | Text input, results slider, candidate cards with scores/justification, expandable full resume, email button with editable subject/body popup | ✅ Done |
-| 4.4 | Docker setup | `Dockerfile` + `docker-compose.yml` for one-command startup | ✅ Done |
-| 4.5 | Structured logging | Timestamped logging across all 6 pipeline steps (guardrail, extraction, expansion, search, rerank, score) | ✅ Done |
+| 4.1 | FastAPI endpoints | `POST /search`, `POST /search/stream` (SSE), `POST /ingest`, `GET /candidates/{id}`, `GET /health` | ✅ Done |
+| 4.2 | Pydantic schemas | `ScoredCandidate`, `CandidateDetail`, `SearchRequest`, `SearchResponse` with all fields | ✅ Done |
+| 4.3 | Streamlit UI | Search input, candidate cards with scores, expandable justification, full resume viewer | ✅ Done |
+| 4.4 | Email popup | Click "Send Email" → inline popup with pre-filled recipient email, subject, and interview invitation body | ✅ Done |
+| 4.5 | Email fallback | Default interview scheduling email if LLM output is empty — requests time setup, signed Naga Rithesh | ✅ Done |
+| 4.6 | SSE streaming pipeline | Real-time step-by-step progress updates (guardrail → extraction → expansion → search → rerank → score) | ✅ Done |
+| 4.7 | Docker setup | `Dockerfile` + `docker-compose.yml` for one-command startup | ✅ Done |
+| 4.8 | Structured logging | Timestamped logging across all 6 pipeline steps with email content logged to console | ✅ Done |
 
-**Key files:**
-- `src/api/server.py` — FastAPI application with 4 endpoints
-- `src/api/schemas.py` — Pydantic models for request/response validation
-- `frontend/app.py` — Streamlit UI
-- `Dockerfile` — Multi-stage Python build
-- `docker-compose.yml` — API + frontend container orchestration
+**API Response Fields:**
+| Field | Description |
+|---|---|
+| `id` | Candidate ID |
+| `overall_score` | Combined score (0-100) |
+| `skill_score` | Skill match score (0-100) |
+| `experience_score` | Experience fit score (0-100) |
+| `justification` | Structured reasoning |
+| `email_subject` | Interview invitation subject |
+| `email_body` | Interview invitation body (signed Naga Rithesh) |
+| `email` | Extracted candidate email |
+| `decision` | Hiring decision label |
+| `reason_for_decision` | Reason for decision |
+| `job_description` | Associated job description |
 
 ---
 
@@ -198,14 +206,14 @@ prodapt-capstone/
 ├── Dockerfile                      # Container build
 ├── docker-compose.yml              # API + frontend orchestration
 ├── data/
-│   ├── raw/Resume.csv              # Original Kaggle dataset (53 MB, 2,484 resumes)
-│   └── processed/resumes.json      # Cleaned structured output (29 MB)
+│   ├── raw/Resume.csv              # Original dataset with Decision/Reason columns
+│   └── processed/resumes.json      # Cleaned structured output (325 MB, 10,174 resumes)
 ├── src/
 │   ├── __init__.py
 │   ├── ingestion/
 │   │   ├── __init__.py
 │   │   ├── ingest.py               # CSV → JSON pipeline
-│   │   ├── resume_parser.py        # HTML cleaner + section extractor
+│   │   ├── resume_parser.py        # HTML cleaner + section extractor + email extractor
 │   │   └── skill_dict.py           # 800+ skill keyword patterns
 │   ├── embeddings/
 │   │   ├── __init__.py
@@ -225,19 +233,24 @@ prodapt-capstone/
 │   │   └── final_scorer.py         # GPT-4o-mini: score + justification + email
 │   ├── api/
 │   │   ├── __init__.py
-│   │   ├── server.py               # FastAPI (4 endpoints)
+│   │   ├── server.py               # FastAPI (5 endpoints)
 │   │   └── schemas.py              # Pydantic models
-│   ├── pipeline.py                 # Orchestrator: 6-step pipeline
+│   ├── pipeline.py                 # Orchestrator: 6-step pipeline with SSE streaming
+│   ├── evaluation/
+│   │   └── evaluate.py             # Retrieval evaluation (P@k, R@k, MRR, nDCG)
 │   └── utils/
 │       ├── __init__.py
-│       └── config.py               # Central config loader from .env
+│       ├── config.py               # Central config loader from .env
 │       └── log.py                  # Logging configuration
 ├── frontend/
-│   └── app.py                      # Streamlit UI
+│   └── app.py                      # Streamlit UI with email popup
+├── evaluation_output/
+│   └── retrieval_comparison.png    # Evaluation chart
 ├── requirements.txt
 ├── requirements.md
 ├── development-plan.md
-└── test_pipeline.py
+├── test_pipeline.py
+└── README.md
 ```
 
 ---
@@ -246,14 +259,11 @@ prodapt-capstone/
 
 | Phase | Description | Status |
 |---|---|---|
-| 1 | Data Ingestion & Processing | ✅ **Complete** |
-| 2 | Embedding & Vector Store | ✅ **Complete** |
+| 1 | Data Ingestion & Processing (10,174 resumes) | ✅ **Complete** |
+| 2 | Embedding & Vector Store (Pinecone, 10,174 vectors) | ✅ **Complete** |
 | 3 | Retrieval & Matching Pipeline | ✅ **Complete** |
-| 4 | API & Frontend | ✅ **Complete** |
+| 4 | API & Frontend (with email popup) | ✅ **Complete** |
 | 5 | Advanced Features (R2) | ⏳ **Pending** |
-
-**Completed:** Phases 1-4
-**Remaining:** Phase 5 (future work)
 
 ---
 
@@ -267,10 +277,11 @@ prodapt-capstone/
 | **Hybrid search:** Vector + BM25 with RRF (k=60) | Vector captures semantic meaning, BM25 captures keyword precision; RRF fusion outperforms either alone |
 | **Query expansion:** 3 LLM-generated alternatives | Addresses vague prompts; more alternatives don't improve recall significantly beyond 3 |
 | **No category pre-filter** | Removing it improved cross-domain matching (e.g. "web developer" finding relevant IT candidates) |
-| **Cross-encoder:** `BAAI/bge-reranker-v2-m3` | Cleaner HuggingFace repo than ms-marco-MiniLM; better suited for resume-job text pairs |
+| **Cross-encoder:** `BAAI/bge-reranker-v2-m3` | Better suited for resume-job text pairs; clean HuggingFace repo |
 | **Full resume text for reranking** | Using full text (6K+ chars) vs 2K Pinecone metadata snippet for richer cross-encoder scoring |
 | **Email in same LLM call as scoring** | Avoids extra latency and cost of a separate API call |
-| **No form wrapper in Streamlit** | Session-state-managed results persist across button reruns (fix for email popup disappearing) |
+| **Email extraction from resume** | Candidate email extracted via regex from resume text for pre-filling in email popup |
+| **Signed as Naga Rithesh** | Interview invitation emails signed with "Best regards, Naga Rithesh" |
 
 ---
 
@@ -295,23 +306,13 @@ Use as metadata pre-filter so "senior" query doesn't return freshers.
 ### 3. Section-Weighted Retrieval
 Weight vector search results by which section matched: skill-section matches should rank higher than education-section matches.
 
-### 4. Explainability Template
-Structure explanations for clarity:
-```
-Score: 85/100
-Skills match: React ✓, Node.js ✓, CSS ✓ (3/4 required)
-Experience fit: 4 years (req: 3-5) ✓
-Missing: Docker ✗
-Why: Strong frontend background with relevant project experience building web apps.
-```
-
-### 5. Feedback Loop
+### 4. Feedback Loop
 Add `POST /feedback` endpoint. Store accept/reject per result. Use data later to fine-tune cross-encoder or adjust score weights.
 
-### 6. Caching
+### 5. Caching
 Cache embeddings for frequent queries. If same/similar prompt searched again, skip LLM call and just retrieve + rerank.
 
-### 7. Multi-Agent Pipeline (Future)
+### 6. Multi-Agent Pipeline (Future)
 Extend to specialized agents:
 | Agent | Responsibility |
 |---|---|

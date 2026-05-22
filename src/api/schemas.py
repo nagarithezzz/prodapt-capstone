@@ -19,6 +19,10 @@ class ScoredCandidate(BaseModel):
     skills: list[str]
     years_experience: int | None
     role_category: str
+    decision: str = ""
+    reason_for_decision: str = ""
+    job_description: str = ""
+    email: str = ""
 
 
 class Requirements(BaseModel):
@@ -53,3 +57,6 @@ class CandidateDetail(BaseModel):
     char_count: int
     sections: dict[str, str]
     clean_text: str
+    decision: str = ""
+    reason_for_decision: str = ""
+    job_description: str = ""

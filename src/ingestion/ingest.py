@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
-from src.ingestion.resume_parser import parse_resume
+from src.ingestion.resume_parser import parse_new_resume
 
 
 def ingest_resumes(
@@ -25,9 +25,8 @@ def ingest_resumes(
 
     line_count = 0
     with open(csv_path, "r", encoding="utf-8") as f:
-        reader = csv.reader(f)
-        header = next(reader)
-        print(f"CSV headers: {header}")
+        reader = csv.DictReader(f)
+        print(f"CSV headers: {reader.fieldnames}")
 
         for row in reader:
             line_count += 1
@@ -35,7 +34,7 @@ def ingest_resumes(
                 break
 
             try:
-                parsed = parse_resume(row)
+                parsed = parse_new_resume(row, line_count - 1)
                 if parsed:
                     candidates.append(parsed)
                     processed += 1

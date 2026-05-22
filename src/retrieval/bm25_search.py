@@ -73,6 +73,10 @@ def search_bm25(
                 "years_experience": c.get("years_experience", -1),
                 "role_category": c.get("role_category", ""),
                 "text_preview": (c.get("clean_text", "") or "")[:2000],
+                "decision": c.get("decision", ""),
+                "reason_for_decision": c.get("reason_for_decision", ""),
+                "job_description": c.get("job_description", ""),
+                "email": c.get("email", ""),
             })
 
     scored.sort(key=lambda x: x["score"], reverse=True)

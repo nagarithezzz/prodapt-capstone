@@ -21,8 +21,6 @@ query = st.text_area(
     height=100,
     key="query_input",
 )
-top_k = st.selectbox("Results", [3, 5, 10], index=1, key="top_k_select")
-
 if st.button("Search", type="primary", use_container_width=True):
     if not query.strip():
         st.error("Please enter a job requirement.")
@@ -31,7 +29,7 @@ if st.button("Search", type="primary", use_container_width=True):
             try:
                 resp = requests.post(
                     f"{API_URL}/search/stream",
-                    json={"query": query, "top_k": top_k, "expand_queries": True},
+                    json={"query": query, "top_k": 3, "expand_queries": True},
                     stream=True,
                     timeout=120,
                 )
@@ -119,7 +117,7 @@ if st.session_state.results:
                 st.markdown(f"**Skill Score:** {r['skill_score']}/100")
                 st.markdown(f"**Experience Score:** {r['experience_score']}/100")
                 exp = r["years_experience"]
-                st.markdown(f"**Years Exp:** {exp if exp >= 0 else 'Unknown'}")
+                st.markdown(f"**Years Exp:** {exp if exp is not None and exp >= 0 else 'Unknown'}")
 
             just_col, email_col = st.columns([1, 1])
             with just_col:
@@ -131,28 +129,35 @@ if st.session_state.results:
                     st.rerun()
 
             if st.session_state.email_popup == r["id"]:
-                st.markdown("---")
-                st.markdown("### ✉️ Shortlist Email")
-                col_left, col_right = st.columns([3, 1])
-                with col_left:
-                    to_email = st.text_input("Recipient Email", key=f"to_{r['id']}", placeholder="candidate@email.com")
-                with col_right:
-                    st.markdown("")
-                    st.markdown("")
-                    if st.button("❌ Close", key=f"cl_{r['id']}"):
-                        st.session_state.email_popup = None
-                        st.rerun()
+                st.divider()
+                with st.container(border=True):
+                    col_title, col_close = st.columns([5, 1])
+                    with col_title:
+                        st.markdown("### ✉️ Interview Invitation")
+                    with col_close:
+                        if st.button("❌ Close", key=f"cl_{r['id']}"):
+                            st.session_state.email_popup = None
+                            st.rerun()
 
-                edit_subject = st.text_input("Subject", value=r.get("email_subject", ""), key=f"sub_{r['id']}")
-                edit_body = st.text_area("Body", value=r.get("email_body", ""), height=200, key=f"bod_{r['id']}")
+                    default_subject = r.get("email_subject", "") or "Interview Invitation – Let's Schedule a Time"
+                    default_body = r.get("email_body", "") or (
+                        f"Dear {r['id']},\n\n"
+                        f"Congratulations! Your profile stood out for this role and we'd love to invite you for an interview. "
+                        f"Your skills and experience are a great match for what we're looking for.\n\n"
+                        f"Could you please suggest a few convenient times next week so we can schedule a call?\n\n"
+                        f"Looking forward to speaking with you.\n\nBest regards,\nNaga Rithesh"
+                    )
+                    to_email = st.text_input("Recipient Email", value=r.get("email", ""), key=f"to_{r['id']}", placeholder="candidate@email.com")
+                    edit_subject = st.text_input("Subject", value=default_subject, key=f"sub_{r['id']}")
+                    edit_body = st.text_area("Body", value=default_body, height=200, key=f"bod_{r['id']}")
 
-                if st.button("✅ Send Email", key=f"send_{r['id']}", type="primary"):
-                    if to_email:
-                        st.success(f"📧 Email ready to send to **{to_email}**\n\n"
-                                   f"**Subject:** {edit_subject}\n\n"
-                                   f"**Body:**\n{edit_body}")
-                    else:
-                        st.error("Please enter a recipient email address")
+                    if st.button("✅ Send Email", key=f"send_{r['id']}", type="primary"):
+                        if to_email:
+                            st.success(f"📧 Email ready to send to **{to_email}**\n\n"
+                                       f"**Subject:** {edit_subject}\n\n"
+                                       f"**Body:**\n{edit_body}")
+                        else:
+                            st.error("Please enter a recipient email address")
 
             with st.expander("📄 Full Resume"):
                 try:

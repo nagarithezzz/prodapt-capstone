@@ -4,6 +4,12 @@ from src.ingestion.skill_dict import extract_skills_hybrid
 
 
 _UNICODE_CLEAN = re.compile(r"[^\x00-\x7F]+")
+_EMAIL_RE = re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
+
+
+def extract_email(text: str) -> str:
+    match = _EMAIL_RE.search(text)
+    return match.group(0) if match else ""
 
 
 def clean_html_to_text(html: str) -> str:
@@ -132,4 +138,38 @@ def parse_resume(csv_row: list[str]) -> dict | None:
         "years_experience": experience_years,
         "role_category": role_category,
         "char_count": len(clean_text),
+        "email": extract_email(clean_text),
+    }
+
+
+def parse_new_resume(row: dict, index: int) -> dict | None:
+    role = (row.get("Role") or "").strip()
+    resume_text = (row.get("Resume") or "").strip()
+    decision = (row.get("Decision") or "").strip()
+    reason = (row.get("Reason_for_decision") or "").strip()
+    job_desc = (row.get("Job_Description") or "").strip()
+
+    if not resume_text:
+        return None
+
+    resume_id = f"RES-{index+1:05d}"
+
+    clean_text = resume_text
+    sections = extract_sections(clean_text)
+    skills = extract_section_skills(sections, clean_text)
+    years = extract_years_of_experience(clean_text)
+
+    return {
+        "id": resume_id,
+        "category": "",
+        "clean_text": clean_text,
+        "sections": sections,
+        "skills": skills,
+        "years_experience": years,
+        "role_category": role,
+        "char_count": len(clean_text),
+        "decision": decision,
+        "reason_for_decision": reason,
+        "job_description": job_desc,
+        "email": extract_email(clean_text),
     }

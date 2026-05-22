@@ -75,6 +75,7 @@ def search(req: SearchRequest):
                 justification=r["justification"],
                 email_subject=r.get("email_subject", ""),
                 email_body=r.get("email_body", ""),
+                email=r.get("email", ""),
                 category=r["category"],
                 skills=r["skills"],
                 years_experience=r["years_experience"],
@@ -115,6 +116,9 @@ def get_candidate(candidate_id: str):
                 char_count=c.get("char_count", 0),
                 sections=c.get("sections", {}),
                 clean_text=(c.get("clean_text", "") or "")[:5000],
+                decision=c.get("decision", ""),
+                reason_for_decision=c.get("reason_for_decision", ""),
+                job_description=c.get("job_description", ""),
             )
     raise HTTPException(status_code=404, detail="Candidate not found")
 

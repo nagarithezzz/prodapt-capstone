@@ -42,8 +42,8 @@ Return ONLY a JSON array with objects:
     "skill_score": 0-100,
     "experience_score": 0-100,
     "justification": "**Skills match:** Python ✓, AWS ✓, Docker ✗ (2/3 required)\\n**Experience:** 4 years (required: 3-5) ✓\\n**Missing skills:** Docker\\n**Role alignment:** Senior backend engineer ✓\\n**Why:** Strong alignment on technical stack and experience level.",
-    "email_subject": "Shortlist email subject line (max 10 words)",
-    "email_body": "Professional email body (3-4 sentences) informing the candidate they are shortlisted for the interview, mention how their skills/experience matched the role, and that interview details will follow soon."
+    "email_subject": "Interview invitation subject line requesting time setup (max 10 words)",
+    "email_body": "Professional email body (3-4 sentences) congratulating the candidate, briefly mentioning why their skills fit the role, and requesting them to suggest convenient times for an interview. Sign off with 'Best regards,\\nNaga Rithesh'."
   }}
 ]
 
@@ -122,6 +122,10 @@ def score_candidates(query: str, candidates: list[dict]) -> list[dict]:
             "skills": c.get("skills", []),
             "years_experience": c.get("years_experience", -1),
             "role_category": c.get("role_category", ""),
+            "decision": c.get("decision", ""),
+            "reason_for_decision": c.get("reason_for_decision", ""),
+            "job_description": c.get("job_description", ""),
+            "email": c.get("email", ""),
         })
 
     ranked.sort(key=lambda x: x["overall_score"], reverse=True)

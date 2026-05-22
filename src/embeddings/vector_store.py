@@ -65,9 +65,19 @@ def upsert_vectors(vectors: list[dict], batch_size: int = 100) -> int:
 
 
 def create_metadata(candidate: dict) -> dict:
-    return {
+    meta = {
         "category": candidate.get("category", ""),
         "skills": ",".join(candidate.get("skills", [])),
         "years_experience": candidate.get("years_experience") or -1,
         "role_category": candidate.get("role_category") or "",
     }
+    decision = candidate.get("decision")
+    if decision:
+        meta["decision"] = decision
+    reason = candidate.get("reason_for_decision")
+    if reason:
+        meta["reason_for_decision"] = reason
+    jd = candidate.get("job_description")
+    if jd:
+        meta["job_description"] = jd[:500]
+    return meta
