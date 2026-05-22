@@ -1,4 +1,5 @@
 import json
+import re
 import streamlit as st
 import requests
 
@@ -14,6 +15,8 @@ for key in ["results", "requirements", "last_query"]:
         st.session_state[key] = None
 if "email_popup" not in st.session_state:
     st.session_state.email_popup = None
+if "bg_verification" not in st.session_state:
+    st.session_state.bg_verification = {}
 
 query = st.text_area(
     "Job Requirement",
@@ -77,6 +80,7 @@ if st.button("Search", type="primary", use_container_width=True):
                     st.session_state.requirements = data["requirements"]
                     st.session_state.last_query = query
                     st.session_state.email_popup = None
+                    st.session_state.bg_verification = {}
                     st.rerun()
 
             except requests.exceptions.ConnectionError:
@@ -119,10 +123,84 @@ if st.session_state.results:
                 exp = r["years_experience"]
                 st.markdown(f"**Years Exp:** {exp if exp is not None and exp >= 0 else 'Unknown'}")
 
-            just_col, email_col = st.columns([1, 1])
+            just_col, bg_col, email_col = st.columns([1, 1, 1])
             with just_col:
                 with st.expander("💬 Justification"):
                     st.markdown(r["justification"])
+            with bg_col:
+                if st.button("🔍 Run BG Verification", key=f"bg_{r['id']}", use_container_width=True):
+                    with st.spinner("Logging into LinkedIn and fetching profile..."):
+                        try:
+                            detail_resp = requests.get(f"{API_URL}/candidates/{r['id']}", timeout=10)
+                            linkedin_url = None
+                            if detail_resp.ok:
+                                detail = detail_resp.json()
+                                text = detail.get("clean_text", "") or ""
+                                sections = detail.get("sections", {})
+                                all_text = text + " " + " ".join(sections.values())
+                                match = re.search(r'(https?://)?(www\.)?linkedin\.com/in/[\w\-%]+', all_text, re.IGNORECASE)
+                                if match:
+                                    linkedin_url = match.group(0)
+
+                            if linkedin_url:
+                                bg_resp = requests.post(
+                                    f"{API_URL}/bg-verification",
+                                    json={"linkedin_url": linkedin_url},
+                                    timeout=120,
+                                )
+                                if bg_resp.ok:
+                                    bg_data = bg_resp.json()
+                                    st.session_state.bg_verification[r["id"]] = bg_data
+                                else:
+                                    st.session_state.bg_verification[r["id"]] = {
+                                        "status": "error",
+                                        "message": "BG verification API failed",
+                                    }
+                            else:
+                                st.session_state.bg_verification[r["id"]] = {
+                                    "status": "error",
+                                    "message": "No LinkedIn URL found in resume",
+                                }
+                        except Exception as e:
+                            st.session_state.bg_verification[r["id"]] = {
+                                "status": "error",
+                                "message": f"Error: {str(e)}",
+                            }
+                    st.rerun()
+
+            if r["id"] in st.session_state.bg_verification:
+                bg = st.session_state.bg_verification[r["id"]]
+                if bg.get("status") == "success":
+                    with st.expander("✅ BG Verification — LinkedIn Profile"):
+                        about = bg.get("about", "")
+                        if about:
+                            st.markdown("### 📋 About")
+                            st.markdown(about)
+                        experience = bg.get("experience", [])
+                        if experience:
+                            st.markdown("### 💼 Experience")
+                            for i, exp in enumerate(experience, 1):
+                                with st.container(border=True):
+                                    st.markdown(f"**{exp.get('title', '')}**")
+                                    if exp.get('company'):
+                                        st.markdown(f"🏢 {exp['company']}")
+                                    info_parts = []
+                                    if exp.get('dates'):
+                                        info_parts.append(f"📅 {exp['dates']} ({exp.get('duration', '')})")
+                                    if exp.get('location'):
+                                        info_parts.append(f"📍 {exp['location']}")
+                                    if exp.get('mode'):
+                                        info_parts.append(f"🏠 {exp['mode']}")
+                                    if exp.get('employment_type'):
+                                        info_parts.append(f"💼 {exp['employment_type']}")
+                                    if info_parts:
+                                        st.markdown(" · ".join(info_parts))
+                                    if exp.get('skills'):
+                                        st.markdown(f"**Skills:** {', '.join(exp['skills'])}")
+                                    if exp.get('description'):
+                                        st.markdown(f"_{exp['description'][:300]}_")
+                elif bg.get("status") == "error":
+                    st.error(f"❌ {bg.get('message', 'BG verification failed')}")
             with email_col:
                 if st.button("📧 Send Email", key=f"eb_{r['id']}", use_container_width=True):
                     st.session_state.email_popup = r["id"]

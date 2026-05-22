@@ -13,10 +13,14 @@ from src.api.schemas import (
     Requirements,
     IngestResponse,
     CandidateDetail,
+    BgVerificationRequest,
+    BgVerificationResponse,
+    ExperienceEntry,
 )
 from src.pipeline import run_pipeline, run_pipeline_stream
 from src.ingestion.resume_parser import parse_resume
 from src.embeddings.ingest_vectors import ingest_all
+from src.agents.bg_verification import scrape_linkedin_profile
 
 app = FastAPI(title="Resume Intelligence API", version="1.0.0")
 
@@ -38,6 +42,21 @@ def _load_candidates() -> list[dict]:
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.post("/bg-verification", response_model=BgVerificationResponse)
+def bg_verification(req: BgVerificationRequest):
+    if not req.linkedin_url.strip():
+        raise HTTPException(status_code=400, detail="LinkedIn URL cannot be empty")
+
+    result = scrape_linkedin_profile(req.linkedin_url)
+
+    return BgVerificationResponse(
+        status=result["status"],
+        message=result.get("message", ""),
+        about=result.get("about", ""),
+        experience=[ExperienceEntry(**e) for e in result.get("experience", [])],
+    )
 
 
 @app.post("/search", response_model=SearchResponse)

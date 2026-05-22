@@ -40,3 +40,17 @@ def get_pinecone_index_name() -> str:
 
 def get_embedding_dim() -> int:
     return int(os.getenv("EMBEDDING_DIM", "1536"))
+
+
+def get_linkedin_email() -> str:
+    key = os.getenv("LINKEDIN_EMAIL", "")
+    if not key:
+        raise ValueError("LINKEDIN_EMAIL not set. Create a .env file with your LinkedIn email.")
+    return key
+
+
+def get_linkedin_password() -> str:
+    key = os.getenv("LINKEDIN_PASSWORD", "")
+    if not key:
+        raise ValueError("LINKEDIN_PASSWORD not set. Create a .env file with your LinkedIn password.")
+    return key

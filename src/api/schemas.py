@@ -60,3 +60,26 @@ class CandidateDetail(BaseModel):
     decision: str = ""
     reason_for_decision: str = ""
     job_description: str = ""
+
+
+class BgVerificationRequest(BaseModel):
+    linkedin_url: str
+
+
+class ExperienceEntry(BaseModel):
+    title: str = ""
+    company: str = ""
+    employment_type: str = ""
+    location: str = ""
+    mode: str = ""
+    dates: str = ""
+    duration: str = ""
+    description: str = ""
+    skills: list[str] = []
+
+
+class BgVerificationResponse(BaseModel):
+    status: str
+    message: str = ""
+    about: str = ""
+    experience: list[ExperienceEntry] = []

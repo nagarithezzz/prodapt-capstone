@@ -32,7 +32,7 @@ def _report(step: str, status: str, **kwargs) -> dict:
 
 def run_pipeline(
     query: str,
-    top_k_retrieve: int = 20,
+    top_k_retrieve: int = 10,
     top_k_rerank: int = 5,
     expand_queries: bool = True,
     verbose: bool = False,
@@ -54,7 +54,7 @@ def run_pipeline(
 
 def run_pipeline_stream(
     query: str,
-    top_k_retrieve: int = 20,
+    top_k_retrieve: int = 10,
     top_k_rerank: int = 5,
     expand_queries: bool = True,
 ) -> dict:
